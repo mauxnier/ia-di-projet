@@ -2,7 +2,7 @@ import os
 import glob
 from lxml import etree
 
-# Define a function to parse an XML file and convert it to a list of dictionaries
+# Définir une fonction pour analyser un fichier XML et le convertir en liste de dictionnaires
 def parse_xml_file(xml_file):
     flow_data = []
     tree = etree.parse(xml_file)
@@ -16,21 +16,21 @@ def parse_xml_file(xml_file):
 
     return flow_data
 
-# Specify the directory containing the XML files
+# Spécifiez le répertoire contenant les fichiers XML
 xml_files_dir = 'TRAIN_ENSIBS'
 
-# Get a list of all XML files in the directory
+# Obtenez une liste de tous les fichiers XML du répertoire
 xml_files = glob.glob(os.path.join(xml_files_dir, '*.xml'))
 
-# Initialize an empty list to store all flow data
+# Initialisez une liste vide pour stocker toutes les données de flux
 all_flow_data = []
 
-# Iterate through each XML file and parse it
+# Parcourez chaque fichier XML et analysez-le
 for xml_file in xml_files:
     flow_data = parse_xml_file(xml_file)
     all_flow_data.extend(flow_data)
 
-# Now, all_flow_data contains a list of dictionaries, where each dictionary corresponds to a single flow
-# You can access and manipulate the data as needed
+# Désormais, all_flow_data contient une liste de dictionnaires, où chaque dictionnaire correspond à un seul flux
+# Vous pouvez accéder et manipuler les données selon vos besoins
 print("Longueur: ", len(all_flow_data))
 # print("Premier élément: ", all_flow_data[0])

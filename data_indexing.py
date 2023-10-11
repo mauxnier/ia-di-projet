@@ -1,19 +1,21 @@
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, TransportError
 from data_loading import all_flow_data
 
-# Specifier les nœuds Elasticsearch
+# Spécifiez les URL des nœuds Elasticsearch (peut être un seul ou une liste de nœuds)
 hosts = ["http://localhost:9200"]  # Exemple pour un nœud local
 
-# Initialize Elasticsearch client
+# Initialisez Elasticsearch en spécifiant les hôtes
 es = Elasticsearch(hosts=hosts)
 
-# Specify the Elasticsearch index and document type
-index_name = 'flow_data_index'
-doc_type = 'flow'
+# Appliquez les options de transport à l'objet Elasticsearch
+es.options(request_timeout=30, max_retries=3)
 
-# Index the flow data into Elasticsearch
+# Spécifiez l'index Elasticsearch et le type de document
+index_name = 'flow_data_index'
+
+# Indexez les données de flux dans Elasticsearch
 for flow in all_flow_data:
-    es.index(index=index_name, doc_type=doc_type, body=flow, id=None, pipeline=None, refresh=True, routing=None, timeout=None, version=None, version_type=None, request_timeout=None)
+    es.index(index=index_name, document=flow, id=None)
 
 # You can now search and retrieve data from Elasticsearch as needed
 # For example, search for all flows with a source port of 80

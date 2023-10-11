@@ -1,8 +1,11 @@
 from elasticsearch import Elasticsearch
 from data_loading import all_flow_data
 
+# Specifier les nœuds Elasticsearch
+hosts = ["http://localhost:9200"]  # Exemple pour un nœud local
+
 # Initialize Elasticsearch client
-es = Elasticsearch()
+es = Elasticsearch(hosts=hosts)
 
 # Specify the Elasticsearch index and document type
 index_name = 'flow_data_index'

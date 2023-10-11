@@ -17,7 +17,7 @@ def parse_xml_file(xml_file):
     return flow_data
 
 # Specify the directory containing the XML files
-xml_files_dir = '/path/to/xml/files'
+xml_files_dir = 'TRAIN_ENSIBS'
 
 # Get a list of all XML files in the directory
 xml_files = glob.glob(os.path.join(xml_files_dir, '*.xml'))

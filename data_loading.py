@@ -28,9 +28,16 @@ all_flow_data = []
 # Parcourez chaque fichier XML et analysez-le
 for xml_file in xml_files:
     flow_data = parse_xml_file(xml_file)
+
+    origin = os.path.basename(xml_file)  # Obtenez le nom du fichier d'origine
+     # Ajoutez le champ "origin" à chaque élément de flow_data
+    for flow in flow_data:
+        flow["origin"] = origin
+
     all_flow_data.extend(flow_data)
 
 # Désormais, all_flow_data contient une liste de dictionnaires, où chaque dictionnaire correspond à un seul flux
 # Vous pouvez accéder et manipuler les données selon vos besoins
+
 print("Longueur: ", len(all_flow_data))
-# print("Premier élément: ", all_flow_data[0])
+print("Premier element: ", all_flow_data[0])

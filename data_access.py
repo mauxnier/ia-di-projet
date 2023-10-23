@@ -1,5 +1,8 @@
 from elasticsearch import Elasticsearch
 from flask import Flask, jsonify, request
+import matplotlib.pyplot as plt
+import numpy as np
+import base64
 
 index_name = 'flow_data_index'
 
@@ -516,6 +519,86 @@ def get_packets_by_application():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+@app.route('/get_flows_and_packets', methods=['GET'])
+def get_flows_and_packets():
+    # Effectuez une requête Elasticsearch pour obtenir les données
+    search_query = {
+        "aggs": {
+            "total_flows": {
+                "sum": {
+                    "field": "flows_field"  # Remplacez par le nom de votre champ de flux
+                }
+            },
+            "total_packets": {
+                "sum": {
+                    "field": "packets_field"  # Remplacez par le nom de votre champ de paquets
+                }
+            }
+        }
+    }
+
+    try:
+        result = es.search(index=index_name, aggs=search_query["aggs"])
+
+        # Extrayez les agrégations de données
+        total_flows = result['aggregations']['total_flows']['value']
+        total_packets = result['aggregations']['total_packets']['value']
+
+        # Retournez les données en tant que réponse JSON
+        return jsonify({
+            "total_flows": total_flows,
+            "total_packets": total_packets
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/ranked_distribution', methods=['GET'])
+def get_ranked_distribution():
+    query = {
+        "size": 1000,  # You can adjust the size based on your data
+        "_source": ["totalSourcePackets", "totalDestinationPackets"]
+    }
+    response = es.search(index=index_name, body=query)
+    flows = []
+    packets = []
+    for hit in response['hits']['hits']:
+        flow = hit['_source']
+        flows.append(flow['totalSourcePackets'] + flow['totalDestinationPackets'])
+        packets.append(flow['totalSourcePackets'])
+
+    # Sort data in descending order
+    flows = sorted(flows, reverse=True)
+    packets = sorted(packets, reverse=True)
+
+    # Calculate the ranks
+    ranks = np.arange(1, len(flows) + 1)
+
+    # Create a log-log plot
+    plt.loglog(packets, flows, marker='o', linestyle='-', color='b')
+
+    # Set labels and title
+    plt.ylabel('#Packets (Log Scale)')
+    plt.xlabel('#Flows (Log Scale)')
+    plt.title('Ranked Distribution of Flows vs. Packets')
+
+    # Save the plot as an image (optional)
+    # plt.savefig('ranked_distribution.png')
+
+    # Convert the plot to a base64 encoded string (optional)
+    import io
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    image_data = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    # You can return the image data as a response if needed
+    # return jsonify({'image_data': image_data})
+
+    # Show the plot (this line should be used in development, not in production)
+    plt.show()
+
+    return jsonify({'message': 'Ranked distribution plot generated'})
 
 
 if __name__ == '__main__':

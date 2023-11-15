@@ -6,10 +6,188 @@ Authors: MONNIER Killian & BAKKARI Ikrame
 Date: 10/2023
 """
 
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, helpers
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
 import ipaddress
+
+pd.set_option("display.max_columns", None)
+pd.set_option("display.max_rows", None)
+
+
+def process_df(df):
+    # Step 2 : Perform conversions on the data
+
+    columns_to_convert = [
+        "sourcePort",
+        "destinationPort",
+        "totalSourceBytes",
+        "totalDestinationBytes",
+        "totalSourcePackets",
+        "totalDestinationPackets",
+    ]
+
+    # Loop through each column and convert to numeric
+    for column in columns_to_convert:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    # Convertir les colonnes startDateTime et stopDateTime en objets datetime
+    df["startDateTime"] = pd.to_datetime(df["startDateTime"])
+    df["stopDateTime"] = pd.to_datetime(df["stopDateTime"])
+
+    # Calculer la durée entre startDateTime et stopDateTime
+    df["duration"] = df["stopDateTime"] - df["startDateTime"]
+
+    # Step 3: Perform encoding on Categorical Data
+
+    # Créer des intervalles pour les adresses IP
+    def map_ip_to_interval(ip):
+        ip = ipaddress.IPv4Address(ip)
+        if ip <= ipaddress.IPv4Address("128.0.0.0"):
+            return "PrivateNetwork"
+        elif ip <= ipaddress.IPv4Address("192.0.0.0"):
+            return "PublicNetwork"
+        elif ip <= ipaddress.IPv4Address("224.0.0.0"):
+            return "MulticastNetwork"
+        else:
+            return "UnknownNetwork"
+
+    # Créer des intervalles de ports
+    port_bins = [0, 1023, 49151, 65535]
+    port_labels = ["WellKnownPorts", "RegisteredPorts", "DynamicPrivatePorts"]
+
+    # Créer des intervalles pour totalSourceBytes et totalDestinationBytes
+    bytes_bins = [
+        0,
+        10000,
+        50000,
+        float("inf"),
+    ]
+    bytes_labels = ["Small", "Medium", "Large"]
+
+    # Créer des intervalles pour totalSourcePackets et totalDestinationPackets
+    packets_bins = [
+        0,
+        100,
+        500,
+        float("inf"),
+    ]
+    packets_labels = ["Low", "Medium", "High"]
+
+    # Créer des intervalles pour la durée
+    def map_duration_to_category(duration):
+        hours = duration.total_seconds() / 3600  # Convertir la durée en heures
+
+        if 0 <= hours < 2:
+            return "Short"
+        elif 2 <= hours < 8:
+            return "Medium"
+        else:
+            return "Long"
+
+    # Liste des noms de colonnes catégorielles
+    categorical_columns = [
+        "sourceCategory",
+        "destinationCategory",
+        "sourcePortCategory",
+        "destinationPortCategory",
+        "totalSourceBytesCategory",
+        "totalDestinationBytesCategory",
+        "totalSourcePacketsCategory",
+        "totalDestinationPacketsCategory",
+        "durationCategory",
+    ]
+
+    for column in categorical_columns:
+        field_name = column.replace("Category", "")
+        if column == "sourceCategory" or column == "destinationCategory":
+            df[column] = df[field_name].apply(map_ip_to_interval)
+        if column == "sourcePortCategory" or column == "destinationPortCategory":
+            df[column] = pd.cut(
+                df[field_name], bins=port_bins, labels=port_labels, include_lowest=True
+            )
+        if (
+            column == "totalSourceBytesCategory"
+            or column == "totalDestinationBytesCategory"
+        ):
+            df[column] = pd.cut(
+                df[field_name],
+                bins=bytes_bins,
+                labels=bytes_labels,
+                include_lowest=True,
+            )
+        if (
+            column == "totalSourcePacketsCategory"
+            or column == "totalDestinationPacketsCategory"
+        ):
+            df[column] = pd.cut(
+                df[field_name],
+                bins=packets_bins,
+                labels=packets_labels,
+                include_lowest=True,
+            )
+        if column == "durationCategory":
+            df[column] = df[field_name].apply(map_duration_to_category)
+
+    # Supprimer les colonnes catégorielles d'origine
+    categorical_columns_without_category = [
+        col.replace("Category", "") for col in categorical_columns
+    ]
+    # print(categorical_columns_without_category)
+
+    columns_to_drop = categorical_columns_without_category + [
+        "startDateTime",
+        "stopDateTime",
+        "sourcePayloadAsBase64",
+        "sourcePayloadAsUTF",
+        "destinationPayloadAsBase64",
+        "destinationPayloadAsUTF",
+    ]
+
+    # Check if the columns exist before dropping them
+    existing_columns = set(df.columns)
+    columns_to_drop = [col for col in columns_to_drop if col in existing_columns]
+    df.drop(columns=columns_to_drop, inplace=True)
+
+    # Step 4: Perform One-Hot Encoding on Categorical Data
+    df_encoded = pd.get_dummies(
+        df,
+        columns=[
+            "appName",
+            "direction",
+            "protocolName",
+        ].extend(categorical_columns),
+    )
+    return df_encoded
+
+
+def indexing_enc(df_encoded, batch_num):
+    # Convert DataFrame to a list of dictionaries
+    flows = df_encoded.to_dict(orient="records")
+
+    # Create actions for helpers.bulk()
+    actions = [
+        {
+            "_op_type": "index",
+            "_index": enc_index_name,  # Remplacez par le nom de votre nouvel index
+            "_source": flow,
+        }
+        for flow in flows
+    ]
+
+    # Use helpers.bulk for efficient indexing
+    success, failed = helpers.bulk(es, actions, raise_on_error=False)
+
+    if success:
+        print(f"Batch {batch_num + 1}: Success in indexing: {success}")
+
+    if failed:
+        print(f"Batch {batch_num + 1}: Failures in indexing: {failed}")
+
+    # If there are failures, print details for each failed document
+    for failure in failed:
+        print(f"Failed document: {failure['index']}")
+        print(f"Error details: {failure['error']}")
+
 
 # Specify the Elasticsearch node URLs (can be a single or list of nodes)
 hosts = ["http://localhost:9200"]
@@ -17,194 +195,41 @@ hosts = ["http://localhost:9200"]
 # Connect to Elasticsearch
 es = Elasticsearch(hosts=hosts)
 
+# Appliquez les options de transport à l'objet Elasticsearch
+es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
+
 # Define your Elasticsearch index
 index_name = "flow_data_index"
+enc_index_name = "flow_data_enc"
 
-# Step 1: Retrieve Data from Elasticsearch
-# query = {"query": {"match_all": {}}}  # You can customize this query based on your needs
-query = {
-    "query": {"match_all": {}},
-    "size": 5,  # Set the size to the number of flows you want to retrieve
-}
+# Supprimez l'index existant (attention, cela supprime toutes les données de l'index)
+es.indices.delete(index=enc_index_name, ignore=[400, 404])
 
-result = es.search(
-    index=index_name,
-    query={"match_all": {}},
-    size=5,
-)
-hits = result["hits"]["hits"]
+# Initial search request
+result = es.search(index=index_name, query={"match_all": {}}, scroll="2m", size=10000)
 
-# Convert Elasticsearch results to a pandas DataFrame
-df = pd.DataFrame([hit["_source"] for hit in hits])
+# Initialize a counter for batches
+batch_counter = 1
 
-pd.set_option("display.max_columns", None)
-pd.set_option("display.max_rows", None)
+# Continue scrolling until no more results
+while len(result["hits"]["hits"]) > 0:
+    # Process the current batch of results and create the DataFrame
+    df = pd.DataFrame(hit["_source"] for hit in result["hits"]["hits"])
 
-# Step 2 : Perform conversions on the data
+    # Process the DataFrame (replace this with your actual processing logic)
+    df_enc = process_df(df)
 
-columns_to_convert = [
-    # "source",
-    # "destination",
-    "sourcePort",
-    "destinationPort",
-    "totalSourceBytes",
-    "totalDestinationBytes",
-    "totalSourcePackets",
-    "totalDestinationPackets",
-]
+    # Index the processed DataFrame (replace this with your actual indexing logic)
+    indexing_enc(df_enc, batch_counter)
 
-# Loop through each column and convert to numeric
-for column in columns_to_convert:
-    df[column] = pd.to_numeric(df[column], errors="coerce")
+    # Increment the batch counter
+    batch_counter += 1
+    print(f"Batch {batch_counter} completed.")
 
-# Convertir les colonnes startDateTime et stopDateTime en objets datetime
-df["startDateTime"] = pd.to_datetime(df["startDateTime"])
-df["stopDateTime"] = pd.to_datetime(df["stopDateTime"])
+    # Use the scroll ID to retrieve the next batch
+    result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")
 
-# Calculer la durée entre startDateTime et stopDateTime
-df["duration"] = df["stopDateTime"] - df["startDateTime"]
+# Close the scroll
+es.clear_scroll(scroll_id=result["_scroll_id"])
 
-# Step 3: Perform encoding on Categorical Data
-
-
-# Créer des intervalles pour les adresses IP
-def map_ip_to_interval(ip):
-    ip = ipaddress.IPv4Address(ip)
-    if ip <= ipaddress.IPv4Address("128.0.0.0"):
-        return "PrivateNetwork"
-    elif ip <= ipaddress.IPv4Address("192.0.0.0"):
-        return "PublicNetwork"
-    elif ip <= ipaddress.IPv4Address("224.0.0.0"):
-        return "MulticastNetwork"
-    else:
-        return "UnknownNetwork"
-
-
-# Créer des intervalles de ports
-port_bins = [0, 1023, 49151, 65535]
-port_labels = ["WellKnownPorts", "RegisteredPorts", "DynamicPrivatePorts"]
-
-# Créer des intervalles pour totalSourceBytes et totalDestinationBytes
-bytes_bins = [
-    0,
-    10000,
-    50000,
-    float("inf"),
-]
-bytes_labels = ["Small", "Medium", "Large"]
-
-# Créer des intervalles pour totalSourcePackets et totalDestinationPackets
-packets_bins = [
-    0,
-    100,
-    500,
-    float("inf"),
-]
-packets_labels = ["Low", "Medium", "High"]
-
-
-# Créer des intervalles pour la durée
-def map_duration_to_category(duration):
-    hours = duration.total_seconds() / 3600  # Convertir la durée en heures
-
-    if 0 <= hours < 2:
-        return "Short"
-    elif 2 <= hours < 8:
-        return "Medium"
-    else:
-        return "Long"
-
-
-# Liste des noms de colonnes catégorielles
-categorical_columns = [
-    "sourceCategory",
-    "destinationCategory",
-    "sourcePortCategory",
-    "destinationPortCategory",
-    "totalSourceBytesCategory",
-    "totalDestinationBytesCategory",
-    "totalSourcePacketsCategory",
-    "totalDestinationPacketsCategory",
-    "durationCategory",
-]
-
-for column in categorical_columns:
-    field_name = column.replace("Category", "")
-    if column == "sourceCategory" or column == "destinationCategory":
-        df[column] = df[field_name].apply(map_ip_to_interval)
-    if column == "sourcePortCategory" or column == "destinationPortCategory":
-        df[column] = pd.cut(
-            df[field_name], bins=port_bins, labels=port_labels, include_lowest=True
-        )
-    if (
-        column == "totalSourceBytesCategory"
-        or column == "totalDestinationBytesCategory"
-    ):
-        df[column] = pd.cut(
-            df[field_name], bins=bytes_bins, labels=bytes_labels, include_lowest=True
-        )
-    if (
-        column == "totalSourcePacketsCategory"
-        or column == "totalDestinationPacketsCategory"
-    ):
-        df[column] = pd.cut(
-            df[field_name],
-            bins=packets_bins,
-            labels=packets_labels,
-            include_lowest=True,
-        )
-    if column == "durationCategory":
-        df[column] = df[field_name].apply(map_duration_to_category)
-
-# Créer un dictionnaire pour stocker les résultats encodés
-encoded_data = {}
-
-# Créer et appliquer l'encodeur pour chaque colonne catégorielle
-for column in categorical_columns:
-    encoder = OneHotEncoder(sparse=False, drop="first")
-    encoded_data[column] = encoder.fit_transform(df[[column]])
-
-# Convertir les données encodées en DataFrames pandas
-encoded_dfs = {
-    column: pd.DataFrame(
-        encoded_values,
-        columns=[f"{column}_{i}" for i in range(encoded_values.shape[1])],
-    )
-    for column, encoded_values in encoded_data.items()
-}
-
-# Concaténer les DataFrames encodés avec le DataFrame d'origine
-df = pd.concat([df, *encoded_dfs.values()], axis=1)
-
-# Supprimer les colonnes catégorielles d'origine
-categorical_columns_without_category = [
-    col.replace("Category", "") for col in categorical_columns
-]
-print(categorical_columns_without_category)
-df.drop(
-    columns=[
-        "startDateTime",
-        "stopDateTime",
-    ].extend(categorical_columns_without_category),
-    inplace=True,
-)
-
-# Step 4: Perform One-Hot Encoding on Categorical Data
-df_encoded = pd.get_dummies(
-    df,
-    columns=[
-        "appName",
-        "direction",
-        "protocolName",
-    ].extend(categorical_columns),
-    drop_first=True,
-)
-
-# Last step: Store Encoded Data Back to Elasticsearch
-# for _, row in df_encoded.iterrows():
-#     doc = row.to_dict()
-#     es.index(index=index_name+"_enc", body=doc)
-
-print("Data encoding and reindexing completed.")
-
-print(df_encoded)
+print("Data encoding completed.")

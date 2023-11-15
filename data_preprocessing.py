@@ -160,7 +160,7 @@ def process_df(df):
     return df_encoded
 
 
-def indexing_enc(df_encoded, batch_num):
+def indexing_enc(df_encoded):
     # Convert DataFrame to a list of dictionaries
     flows = df_encoded.to_dict(orient="records")
 
@@ -176,12 +176,6 @@ def indexing_enc(df_encoded, batch_num):
 
     # Use helpers.bulk for efficient indexing
     success, failed = helpers.bulk(es, actions, raise_on_error=False)
-
-    if success:
-        print(f"Batch {batch_num + 1}: Success in indexing: {success}")
-
-    if failed:
-        print(f"Batch {batch_num + 1}: Failures in indexing: {failed}")
 
     # If there are failures, print details for each failed document
     for failure in failed:
@@ -206,10 +200,7 @@ enc_index_name = "flow_data_enc"
 es.indices.delete(index=enc_index_name, ignore=[400, 404])
 
 # Initial search request
-result = es.search(index=index_name, query={"match_all": {}}, scroll="2m", size=10000)
-
-# Initialize a counter for batches
-batch_counter = 1
+result = es.search(index=index_name, query={"match_all": {}}, scroll="2m", size=5000)
 
 # Continue scrolling until no more results
 while len(result["hits"]["hits"]) > 0:
@@ -220,11 +211,7 @@ while len(result["hits"]["hits"]) > 0:
     df_enc = process_df(df)
 
     # Index the processed DataFrame (replace this with your actual indexing logic)
-    indexing_enc(df_enc, batch_counter)
-
-    # Increment the batch counter
-    batch_counter += 1
-    print(f"Batch {batch_counter} completed.")
+    indexing_enc(df_enc)
 
     # Use the scroll ID to retrieve the next batch
     result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")

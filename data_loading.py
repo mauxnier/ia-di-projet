@@ -1,6 +1,15 @@
+"""
+Project: AD4IDS - Anomaly Detection for Intrusion Detection Systems
+Subproject: 1 - Flow Classification
+Stage: 1 - Data loading from XML files
+Authors: MONNIER Killian & BAKKARI Ikrame
+Date: 10/2023
+"""
+
 import os
 import glob
 from lxml import etree
+
 
 # Définir une fonction pour analyser un fichier XML et le convertir en liste de dictionnaires
 def parse_xml_file(xml_file):
@@ -16,11 +25,12 @@ def parse_xml_file(xml_file):
 
     return flow_data
 
+
 # Spécifiez le répertoire contenant les fichiers XML
-xml_files_dir = 'TRAIN_ENSIBS'
+xml_files_dir = "TRAIN_ENSIBS"
 
 # Obtenez une liste de tous les fichiers XML du répertoire
-xml_files = glob.glob(os.path.join(xml_files_dir, '*.xml'))
+xml_files = glob.glob(os.path.join(xml_files_dir, "*.xml"))
 
 # Initialisez une liste vide pour stocker toutes les données de flux
 all_flow_data = []
@@ -30,7 +40,7 @@ for xml_file in xml_files:
     flow_data = parse_xml_file(xml_file)
 
     origin = os.path.basename(xml_file)  # Obtenez le nom du fichier d'origine
-     # Ajoutez le champ "origin" à chaque élément de flow_data
+    # Ajoutez le champ "origin" à chaque élément de flow_data
     for flow in flow_data:
         flow["origin"] = origin
 

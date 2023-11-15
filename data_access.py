@@ -1,3 +1,11 @@
+"""
+Project: AD4IDS - Anomaly Detection for Intrusion Detection Systems
+Subproject: 1 - Flow Classification
+Stage: 3 - Data access via REST API
+Authors: MONNIER Killian & BAKKARI Ikrame
+Date: 10/2023
+"""
+
 from elasticsearch import Elasticsearch
 from flask import Flask, jsonify, request
 import matplotlib.pyplot as plt

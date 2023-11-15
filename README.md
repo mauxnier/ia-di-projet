@@ -61,8 +61,5 @@ This project focuses on flow classification for Intrusion Detection Systems (IDS
   - Modify the Elasticsearch node URLs in the scripts if needed.
   - Adjust index names and other Elasticsearch configurations as necessary.
 
-### License
-This project is licensed under the [MIT License](LICENSE).
-
 ==
 

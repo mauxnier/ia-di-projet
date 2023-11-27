@@ -40,7 +40,7 @@ This project focuses on flow classification for Intrusion Detection Systems (IDS
 
 ### Prerequisites
 - Python 3.x
-- Elasticsearch instance running locally
+- Elasticsearch instance running locally : http://localhost:9200/_cat/indices?v
 
 ### Installation
 1. Clone the repository:

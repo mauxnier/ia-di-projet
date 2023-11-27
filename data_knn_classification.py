@@ -74,4 +74,4 @@ print(df.head())
 # print("\nClassification Report:")
 # print(classification_report(y_test, y_pred))
 
-print("Data encoding and k-NN completed.")
+#print("Data encoding and k-NN completed.")

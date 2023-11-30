@@ -20,9 +20,21 @@ es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
 # index_name = "flow_data_index"
 index_name = "flow_data_enc"
 
+# query = {"match_all": {}}
+
+query = {
+    "bool": {
+        "should": [
+            {"term": {"appName_HTTPWeb": 1}},
+            {"term": {"appName_SSH": 1}},
+        ],
+        "minimum_should_match": 1,
+    }
+}
+
 result = es.search(
     index=index_name,
-    query={"match": {"appName.keyword": "HTTPWeb"}},
+    query=query,
     scroll="2m",
     size=10000,
 )
@@ -33,7 +45,8 @@ df_list = []
 # Continue scrolling until no more results
 while len(result["hits"]["hits"]) > 0:
     # Process the current batch of results and create the DataFrame
-    df_list.append(hit["_source"] for hit in result["hits"]["hits"])
+    df = pd.DataFrame(hit["_source"] for hit in result["hits"]["hits"])
+    df_list.append(df)
 
     # Use the scroll ID to retrieve the next batch
     result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")
@@ -41,13 +54,16 @@ while len(result["hits"]["hits"]) > 0:
 # Close the scroll
 es.clear_scroll(scroll_id=result["_scroll_id"])
 
-print("df_list.size: ", len(df_list))
+print("df_list.size x 10.000: ", len(df_list))
 
 # Concatenate all the results into a single DataFrame
 df = pd.concat(df_list, axis=0)
 
-# Print the DataFrame
-print(df.head())
+# # Print the DataFrame
+# # pd.set_option("display.max_columns", None)
+# # pd.set_option("display.max_rows", None)
+# print(df.head())
+print("Dataframe shape: ", df.shape)
 
 # Assuming df_encoded is your DataFrame with one-hot encoded features
 # and 'is_anomalous' is your target variable
@@ -74,4 +90,4 @@ print(df.head())
 # print("\nClassification Report:")
 # print(classification_report(y_test, y_pred))
 
-#print("Data encoding and k-NN completed.")
+# print("Data encoding and k-NN completed.")

@@ -9,6 +9,13 @@ Date: 10/2023
 from elasticsearch import Elasticsearch, helpers
 import pandas as pd
 import ipaddress
+import os
+import sys
+
+# Display a warning message
+print(
+    "WARNING: This script will perform operations that may take a significant amount of time."
+)
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
@@ -160,15 +167,15 @@ def process_df(df):
     return df_encoded
 
 
-def indexing_enc(df_encoded):
-    # Convert DataFrame to a list of dictionaries
-    flows = df_encoded.to_dict(orient="records")
+def indexing_enc(df_encoded, index_name):
+    # Convert DataFrame to a list of dictionaries with boolean values
+    flows = df_encoded.astype(bool).to_dict(orient="records")
 
     # Create actions for helpers.bulk()
     actions = [
         {
             "_op_type": "index",
-            "_index": enc_index_name,  # Remplacez par le nom de votre nouvel index
+            "_index": index_name,  # Replace with the name of your new index
             "_source": flow,
         }
         for flow in flows
@@ -183,6 +190,17 @@ def indexing_enc(df_encoded):
         print(f"Error details: {failure['error']}")
 
 
+def indexing_csv(df, csv_name):
+    # Check if the CSV file already exists
+    if os.path.exists(csv_name):
+        # If it exists, append the DataFrame to the existing CSV
+        df.to_csv(csv_name, mode="a", header=False, index=False)
+    else:
+        # If it doesn't exist, create a new CSV with the DataFrame
+        df.to_csv(csv_name, index=False)
+        print(f"Data saved to {csv_name}")
+
+
 # Specify the Elasticsearch node URLs (can be a single or list of nodes)
 hosts = ["http://localhost:9200"]
 
@@ -193,14 +211,33 @@ es = Elasticsearch(hosts=hosts)
 es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
 
 # Define your Elasticsearch index
-index_name = "flow_data_index"
-enc_index_name = "flow_data_enc"
+data_index = "flow_data_index"
+
+# Name of the encoded index
+enc_index = "flow_data_enc"
+
+# Check if the index already exists
+index_exists = es.indices.exists(index=enc_index)
+
+# If the index exists, find an available name with a suffix
+if index_exists:
+    suffix = 1
+    new_enc_index = f"{enc_index}_{suffix}"
+
+    while es.indices.exists(index=new_enc_index):
+        suffix += 1
+        new_enc_index = f"{enc_index}_{suffix}"
+else:
+    new_enc_index = enc_index
+
+# Use the new index name for your operations
+print(f"Using index: {new_enc_index}")
 
 # Supprimez l'index existant (attention, cela supprime toutes les données de l'index)
-es.indices.delete(index=enc_index_name, ignore=[400, 404])
+# es.indices.delete(index=enc_index_name, ignore=[400, 404])
 
 # Initial search request
-result = es.search(index=index_name, query={"match_all": {}}, scroll="2m", size=5000)
+result = es.search(index=data_index, query={"match_all": {}}, scroll="2m", size=5000)
 
 # Continue scrolling until no more results
 while len(result["hits"]["hits"]) > 0:
@@ -211,7 +248,8 @@ while len(result["hits"]["hits"]) > 0:
     df_enc = process_df(df)
 
     # Index the processed DataFrame (replace this with your actual indexing logic)
-    indexing_enc(df_enc)
+    indexing_enc(df_enc, new_enc_index)
+    # indexing_csv(df_enc, "test.csv")
 
     # Use the scroll ID to retrieve the next batch
     result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")

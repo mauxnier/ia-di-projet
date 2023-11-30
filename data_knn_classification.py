@@ -18,45 +18,50 @@ es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
 # Define Elasticsearch index
 index_name = "flow_data_enc"
 
-# Define the query for HTTPWeb
-query_httpweb = {
-    "query": {
-        "term": {"appName_HTTPWeb": True}
+# query = {"match_all": {}}
+
+query = {
+    "bool": {
+        "should": [
+            {"term": {"appName_HTTPWeb": 1}},
+            {"term": {"appName_SSH": 1}},
+        ],
+        "minimum_should_match": 1,
     }
 }
 
-# Define the query for SSH
-query_ssh = {
-    "query": {
-        "term": {"appName_SSH": True}
-    }
-}
+result = es.search(
+    index=index_name,
+    query=query,
+    scroll="2m",
+    size=10000,
+)
 
-# Execute the queries
-response_httpweb = es.search(index=index_name, body=query_httpweb)
-response_ssh = es.search(index=index_name, body=query_ssh)
+# Initialize an empty DataFrame to store the results
+df_list = []
 
-# Extract the hits from the responses
-hits_httpweb = response_httpweb["hits"]["hits"]
-hits_ssh = response_ssh["hits"]["hits"]
+# Continue scrolling until no more results
+while len(result["hits"]["hits"]) > 0:
+    # Process the current batch of results and create the DataFrame
+    df = pd.DataFrame(hit["_source"] for hit in result["hits"]["hits"])
+    df_list.append(df)
 
-# Convert the hits to a DataFrame (if needed)
-df_httpweb = pd.DataFrame(hit["_source"] for hit in hits_httpweb)
-df_ssh = pd.DataFrame(hit["_source"] for hit in hits_ssh)
+    # Use the scroll ID to retrieve the next batch
+    result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")
 
-# Set display options to show all rows and columns
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
+# Close the scroll
+es.clear_scroll(scroll_id=result["_scroll_id"])
 
-# Print or use the filtered DataFrames as needed
-print("Filtered Data for HTTPWeb:")
-print(df_httpweb)
+print("df_list.size x 10.000: ", len(df_list))
 
-print("Filtered Data for SSH:")
-print(df_ssh)
+# Concatenate all the results into a single DataFrame
+df = pd.concat(df_list, axis=0)
 
-print("Length of http web data",len(df_httpweb))
-print("Length of http web data",len(df_ssh))
+# # Print the DataFrame
+# # pd.set_option("display.max_columns", None)
+# # pd.set_option("display.max_rows", None)
+# print(df.head())
+print("Dataframe shape: ", df.shape)
 
 # Define the features and target variable for classification
 X_httpweb = df_httpweb.drop(['Tag_Attack', 'Tag_Normal'], axis=1)

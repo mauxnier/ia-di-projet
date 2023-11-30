@@ -1,16 +1,15 @@
 from elasticsearch import Elasticsearch
 import pandas as pd
-
-# Specify the Elasticsearch node URLs (can be a single or list of nodes)
-hosts = ["http://localhost:9200"]
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, accuracy_score
 
 # Connect to Elasticsearch
-es = Elasticsearch(hosts=hosts)
-
-# Apply transport options to the Elasticsearch object
+es = Elasticsearch(hosts=["http://localhost:9200"])
 es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
-
-# Define Elasticsearch index
 index_name = "flow_data_enc"
 
 # Define the query for HTTPWeb

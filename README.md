@@ -63,3 +63,9 @@ This project focuses on flow classification for Intrusion Detection Systems (IDS
 
 ==
 
+précision
+rappel
+Calculer air sous la courbe ROC (AUC)
+Moyenne ecart type
+ACC
+F1 score

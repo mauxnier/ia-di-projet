@@ -202,8 +202,6 @@ es.indices.delete(index=enc_index_name, ignore=[400, 404])
 # Initial search request
 result = es.search(index=index_name, query={"match_all": {}}, scroll="2m", size=5000)
 
-es.search
-
 # Continue scrolling until no more results
 while len(result["hits"]["hits"]) > 0:
     # Process the current batch of results and create the DataFrame

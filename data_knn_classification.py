@@ -1,5 +1,6 @@
 from elasticsearch import Elasticsearch
 import pandas as pd
+from sklearn.calibration import LabelEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -18,18 +19,18 @@ es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
 # Define Elasticsearch index
 index_name = "flow_data_enc"
 
-# query = {"match_all": {}}
-
+# Query to retrieve data
 query = {
     "bool": {
         "should": [
-            {"term": {"appName_HTTPWeb": 1}},
-            {"term": {"appName_SSH": 1}},
+            {"term": {"appName_HTTPWeb": "true"}},
+            {"term": {"appName_SSH": "true"}},
         ],
         "minimum_should_match": 1,
     }
 }
 
+# Execute the query
 result = es.search(
     index=index_name,
     query=query,
@@ -57,45 +58,65 @@ print("df_list.size x 10.000: ", len(df_list))
 # Concatenate all the results into a single DataFrame
 df = pd.concat(df_list, axis=0)
 
-# # Print the DataFrame
-# # pd.set_option("display.max_columns", None)
-# # pd.set_option("display.max_rows", None)
-# print(df.head())
-print("Dataframe shape: ", df.shape)
+# Print the new DataFrame shape after dropping NaN values
+print("Dataframe shape after dropping NaN values:", df.shape)
 
-# Define the features and target variable for classification
-X_httpweb = df_httpweb.drop(['Tag_Attack', 'Tag_Normal'], axis=1)
-y_httpweb = df_httpweb['Tag_Attack']
+# Check if there are still samples in the dataset after dropping NaN values
+if df.shape[0] == 0:
+    print("No samples remaining in the dataset after dropping NaN values.")
+else:
+    # Check for NaN values in the DataFrame
+    nan_counts = df.isna().sum()
+    print("Number of NaN values in each column:")
+    print(nan_counts)
 
-X_ssh = df_ssh.drop(['Tag_Attack', 'Tag_Normal'], axis=1)
-y_ssh = df_ssh['Tag_Attack']
+    # Identify columns with NaN values
+    columns_with_nan = nan_counts[nan_counts > 0].index.tolist()
+    print("Columns with NaN values:", columns_with_nan)
 
-# Train-Test Split for SSH
-X_train_ssh, X_test_ssh, y_train_ssh, y_test_ssh = train_test_split(
-    X_ssh, y_ssh, test_size=0.2, random_state=42
+    # Choose whether to impute or drop NaN values in those columns
+    # Example: Impute with mean
+    imputer = SimpleImputer(strategy='mean')
+    df[columns_with_nan] = imputer.fit_transform(df[columns_with_nan])
+
+  # Define the features and target variable for classification
+X = df.drop(['Tag_Attack', 'Tag_Normal'], axis=1)
+y = df['Tag_Attack']
+
+# Convert the target variable to categorical
+y = pd.Categorical(y)
+
+# Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
 )
-
-# Impute missing values
-imputer = SimpleImputer(strategy='mean')  # You can choose other strategies as well
-X_train_ssh_imputed = imputer.fit_transform(X_train_ssh)
-X_test_ssh_imputed = imputer.transform(X_test_ssh)
 
 # Preprocess Data (Standardization)
-scaler_ssh = StandardScaler()
-X_train_scaled_ssh = scaler_ssh.fit_transform(X_train_ssh_imputed)
-X_test_scaled_ssh = scaler_ssh.transform(X_test_ssh_imputed)
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
 
-# Train k-NN Model for SSH
-knn_model_ssh = KNeighborsClassifier(n_neighbors=5)
-knn_model_ssh.fit(X_train_scaled_ssh, y_train_ssh)
-y_pred_ssh = knn_model_ssh.predict(X_test_scaled_ssh)
+# Convert labels to numeric values
+le = LabelEncoder()
+y_train = le.fit_transform(y_train)
+y_test = le.transform(y_test)
 
-# Evaluate Performance for SSH
-accuracy_ssh = accuracy_score(y_test_ssh, y_pred_ssh)
-classification_report_result_ssh = classification_report(
-    y_test_ssh, y_pred_ssh, zero_division=1  # Set zero_division to 1
-)
+# Train k-NN Model
+knn_model = KNeighborsClassifier(n_neighbors=5)
 
-print("\nKnn Classification Report for SSH:")
-print(classification_report_result_ssh)
-print("Accuracy for SSH:", accuracy_ssh)
+try:
+    knn_model.fit(X_train_scaled, y_train)
+    y_pred = knn_model.predict(X_test_scaled)
+
+    # Evaluate Performance
+    accuracy = accuracy_score(y_test, y_pred)
+    classification_report_result = classification_report(
+        y_test, y_pred, zero_division=1
+    )
+
+    print("\nKnn Classification Report:")
+    print(classification_report_result)
+    print("Accuracy:", accuracy)
+
+except ValueError as e:
+    print(f"Error fitting the model: {e}")

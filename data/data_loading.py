@@ -27,7 +27,7 @@ def parse_xml_file(xml_file):
 
 
 # Spécifiez le répertoire contenant les fichiers XML
-xml_files_dir = "TRAIN_ENSIBS"
+xml_files_dir = "../TRAIN_ENSIBS"
 
 # Obtenez une liste de tous les fichiers XML du répertoire
 xml_files = glob.glob(os.path.join(xml_files_dir, "*.xml"))

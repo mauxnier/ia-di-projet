@@ -7,7 +7,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report, accuracy_score
+from sklearn.metrics import classification_report, accuracy_score, f1_score, precision_score, recall_score
 
 # Specify the Elasticsearch node URLs (can be a single or list of nodes)
 hosts = ["http://localhost:9200"]
@@ -119,14 +119,17 @@ try:
         knn_model.fit(X_train_subset_scaled, y_train_subset)
         y_pred_subset = knn_model.predict(X_test_scaled)
 
+        # Calculate accuracy, precision, recall, and F1-score
         accuracy_subset = accuracy_score(y_test, y_pred_subset)
-        classification_report_result_subset = classification_report(
-            y_test, y_pred_subset, zero_division=1
-        )
+        precision_subset = precision_score(y_test, y_pred_subset, average='weighted', zero_division=1)
+        recall_subset = recall_score(y_test, y_pred_subset, average='weighted', zero_division=1)
+        f1_subset = f1_score(y_test, y_pred_subset, average='weighted', zero_division=1)
 
         print(f"\nKnn Classification Report on Training Combination {i + 1}:")
-        print(classification_report_result_subset)
-        print(f"Accuracy on Training Combination {i + 1}:", accuracy_subset)
+        print(f"Accuracy on Training Combination {i + 1}: {accuracy_subset}")
+        print(f"Precision on Training Combination {i + 1}: {precision_subset}")
+        print(f"Recall on Training Combination {i + 1}: {recall_subset}")
+        print(f"F1-score on Training Combination {i + 1}: {f1_subset}")
 
 except ValueError as e:
     print(f"Error fitting the model: {e}")
@@ -135,7 +138,15 @@ except ValueError as e:
 X_train_scaled_full = scaler.transform(X_train)
 knn_model.fit(X_train_scaled_full, y_train)
 
-# Print overall accuracy on the full training set
+# Print overall accuracy, precision, recall, and F1-score on the full training set
 y_pred_full = knn_model.predict(X_test_scaled)
 accuracy_full = accuracy_score(y_test, y_pred_full)
-print("\nOverall Accuracy on the Full Training Set:", accuracy_full)
+precision_full = precision_score(y_test, y_pred_full, average='weighted', zero_division=1)
+recall_full = recall_score(y_test, y_pred_full, average='weighted', zero_division=1)
+f1_full = f1_score(y_test, y_pred_full, average='weighted', zero_division=1)
+
+print("\nOverall Metrics on the Full Training Set:")
+print(f"Accuracy: {accuracy_full}")
+print(f"Precision: {precision_full}")
+print(f"Recall: {recall_full}")
+print(f"F1-score: {f1_full}")

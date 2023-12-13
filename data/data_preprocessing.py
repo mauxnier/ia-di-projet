@@ -14,7 +14,7 @@ import sys
 
 # Display a warning message
 print(
-    "WARNING: This script will perform operations that may take a significant amount of time."
+    "WARNING: This script will perform operations that may take a significant amount of time. Visit http://localhost:9200/_cat/indices?v to monitor the progress of the indexing operation."
 )
 
 pd.set_option("display.max_columns", None)
@@ -156,20 +156,43 @@ def process_df(df):
     df.drop(columns=columns_to_drop, inplace=True)
 
     # Step 4: Perform One-Hot Encoding on Categorical Data
-    df_encoded = pd.get_dummies(
-        df,
-        columns=[
-            "appName",
-            "direction",
-            "protocolName",
-        ].extend(categorical_columns),
+    columns_to_encode = ["direction"]
+    columns_to_encode.extend(categorical_columns)
+    df_encoded = pd.get_dummies(df, columns=columns_to_encode)
+
+    # Step 5: Modify the tag
+    df_encoded["tag_Attack"] = df_encoded["Tag"].apply(
+        lambda x: 1 if x == "Attack" else 0
     )
+
+    # Step 6: Modify the sourceTCPFlagsDescription and destinationTCPFlagsDescription
+    unique_letters = ["F", "S", "R", "P", "A", "N/A"]
+
+    for letter in unique_letters:
+        df_encoded[f"sourceTCPFlag_{letter}"] = df_encoded[
+            "sourceTCPFlagsDescription"
+        ].apply(lambda x: letter in x.split(",") if pd.notna(x) else False)
+        df_encoded[f"destinationTCPFlag_{letter}"] = df_encoded[
+            "destinationTCPFlagsDescription"
+        ].apply(lambda x: letter in x.split(",") if pd.notna(x) else False)
+
+    # Drop the original columns
+    df_encoded.drop("sourceTCPFlagsDescription", axis=1, inplace=True)
+    df_encoded.drop("destinationTCPFlagsDescription", axis=1, inplace=True)
+    df_encoded.drop("Tag", axis=1, inplace=True)
+
     return df_encoded
 
 
 def indexing_enc(df_encoded, index_name):
+    # List of columns to keep as strings
+    string_columns = ["appName", "protocolName", "origin"]
+
     # Convert DataFrame to a list of dictionaries with boolean values
-    flows = df_encoded.astype(bool).to_dict(orient="records")
+    flows = df_encoded.astype(
+        {col: bool for col in df_encoded.columns if col not in string_columns}
+    ).to_dict(orient="records")
+    # print(flows[0])
 
     # Create actions for helpers.bulk()
     actions = [
@@ -249,7 +272,9 @@ while len(result["hits"]["hits"]) > 0:
 
     # Index the processed DataFrame (replace this with your actual indexing logic)
     indexing_enc(df_enc, new_enc_index)
-    # indexing_csv(df_enc, "test.csv")
+    # indexing_csv(df_enc, "test-11-12.csv")
+    # print(df_enc.head())
+    # break
 
     # Use the scroll ID to retrieve the next batch
     result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")

@@ -69,3 +69,5 @@ Calculer air sous la courbe ROC (AUC)
 Moyenne ecart type
 ACC
 F1 score
+
+commande pour supprimer index : curl -X http://localhost:9200/index_name

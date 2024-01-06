@@ -7,6 +7,8 @@ Date: 10/2023
 """
 
 from elasticsearch import Elasticsearch, helpers
+from datetime import datetime
+from datetime import timedelta
 import pandas as pd
 import ipaddress
 import os
@@ -43,9 +45,11 @@ def process_df(df):
 
     # Calculer la durée entre startDateTime et stopDateTime
     df["duration"] = df["stopDateTime"] - df["startDateTime"]
+    df["duration"] = df["duration"].apply(lambda x: int(x.total_seconds()))
 
     # Step 3: Perform encoding on Categorical Data
 
+    # TODO diviser en 4 numéros
     # Créer des intervalles pour les adresses IP
     def map_ip_to_interval(ip):
         ip = ipaddress.IPv4Address(ip)
@@ -80,17 +84,6 @@ def process_df(df):
     ]
     packets_labels = ["Low", "Medium", "High"]
 
-    # Créer des intervalles pour la durée
-    def map_duration_to_category(duration):
-        hours = duration.total_seconds() / 3600  # Convertir la durée en heures
-
-        if 0 <= hours < 2:
-            return "Short"
-        elif 2 <= hours < 8:
-            return "Medium"
-        else:
-            return "Long"
-
     # Liste des noms de colonnes catégorielles
     categorical_columns = [
         "sourceCategory",
@@ -101,7 +94,6 @@ def process_df(df):
         "totalDestinationBytesCategory",
         "totalSourcePacketsCategory",
         "totalDestinationPacketsCategory",
-        "durationCategory",
     ]
 
     for column in categorical_columns:
@@ -132,66 +124,96 @@ def process_df(df):
                 labels=packets_labels,
                 include_lowest=True,
             )
-        if column == "durationCategory":
-            df[column] = df[field_name].apply(map_duration_to_category)
 
-    # Supprimer les colonnes catégorielles d'origine
-    categorical_columns_without_category = [
-        col.replace("Category", "") for col in categorical_columns
-    ]
-    # print(categorical_columns_without_category)
+    # Rajouter colonne
+    # Fonction pour extraire l'année
+    def extract_year(dt_list):
+        ret_list = []
+        for dt_str in dt_list:
+            dt_obj = datetime.strptime(str(dt_str), "%Y-%m-%d %H:%M:%S")
+            ret_list.append(dt_obj.year)
+        return ret_list
 
-    columns_to_drop = categorical_columns_without_category + [
+    # Fonction pour extraire le mois
+    def extract_month(dt_list):
+        ret_list = []
+        for dt_str in dt_list:
+            dt_obj = datetime.strptime(str(dt_str), "%Y-%m-%d %H:%M:%S")
+            ret_list.append(dt_obj.month)
+        return ret_list
+
+    # Fonction pour extraire le jour
+    def extract_day(dt_list):
+        ret_list = []
+        for dt_str in dt_list:
+            dt_obj = datetime.strptime(str(dt_str), "%Y-%m-%d %H:%M:%S")
+            ret_list.append(dt_obj.day)
+        return ret_list
+
+    df["start_year"] = extract_year(df["startDateTime"])
+    df["stop_year"] = extract_year(df["stopDateTime"])
+    df["start_month"] = extract_month(df["startDateTime"])
+    df["stop_month"] = extract_month(df["stopDateTime"])
+    df["start_day"] = extract_day(df["startDateTime"])
+    df["stop_day"] = extract_day(df["stopDateTime"])
+
+    # Step 4: Perform One-Hot Encoding on Categorical Data
+    columns_to_encode = ["direction", "protocolName"]
+    columns_to_encode.extend(categorical_columns)
+    df = pd.get_dummies(df, columns=columns_to_encode)
+
+    # Step 5: Modify the tag
+    df["tag_Attack"] = df["Tag"].apply(lambda x: 1 if x == "Attack" else 0)
+
+    # Step 6: Modify the sourceTCPFlagsDescription and destinationTCPFlagsDescription
+    unique_letters = ["F", "S", "R", "P", "A", "N/A"]
+
+    for letter in unique_letters:
+        df[f"sourceTCPFlag_{letter}"] = df["sourceTCPFlagsDescription"].apply(
+            lambda x: int(letter in x.split(",")) if pd.notna(x) else 0
+        )
+        df[f"destinationTCPFlag_{letter}"] = df["destinationTCPFlagsDescription"].apply(
+            lambda x: int(letter in x.split(",")) if pd.notna(x) else 0
+        )
+
+    # Drop the original columns
+    columns_to_drop = [
+        "source",
+        "destination",
+        # "sourcePort",
+        # "destinationPort",
+        "totalSourceBytes",
+        "totalDestinationBytes",
+        "totalSourcePackets",
+        "totalDestinationPackets",
+        # "duration",
         "startDateTime",
         "stopDateTime",
         "sourcePayloadAsBase64",
         "sourcePayloadAsUTF",
         "destinationPayloadAsBase64",
         "destinationPayloadAsUTF",
+        "sourceTCPFlagsDescription",
+        "destinationTCPFlagsDescription",
+        "Tag",
     ]
-
-    # Check if the columns exist before dropping them
     existing_columns = set(df.columns)
     columns_to_drop = [col for col in columns_to_drop if col in existing_columns]
     df.drop(columns=columns_to_drop, inplace=True)
 
-    # Step 4: Perform One-Hot Encoding on Categorical Data
-    columns_to_encode = ["direction"]
-    columns_to_encode.extend(categorical_columns)
-    df_encoded = pd.get_dummies(df, columns=columns_to_encode)
-
-    # Step 5: Modify the tag
-    df_encoded["tag_Attack"] = df_encoded["Tag"].apply(
-        lambda x: 1 if x == "Attack" else 0
-    )
-
-    # Step 6: Modify the sourceTCPFlagsDescription and destinationTCPFlagsDescription
-    unique_letters = ["F", "S", "R", "P", "A", "N/A"]
-
-    for letter in unique_letters:
-        df_encoded[f"sourceTCPFlag_{letter}"] = df_encoded[
-            "sourceTCPFlagsDescription"
-        ].apply(lambda x: letter in x.split(",") if pd.notna(x) else False)
-        df_encoded[f"destinationTCPFlag_{letter}"] = df_encoded[
-            "destinationTCPFlagsDescription"
-        ].apply(lambda x: letter in x.split(",") if pd.notna(x) else False)
-
-    # Drop the original columns
-    df_encoded.drop("sourceTCPFlagsDescription", axis=1, inplace=True)
-    df_encoded.drop("destinationTCPFlagsDescription", axis=1, inplace=True)
-    df_encoded.drop("Tag", axis=1, inplace=True)
-
-    return df_encoded
+    return df
 
 
 def indexing_enc(df_encoded, index_name):
     # List of columns to keep as strings
-    string_columns = ["appName", "protocolName", "origin"]
+    string_columns = ["appName", "origin", "duration"]
 
-    # Convert DataFrame to a list of dictionaries with boolean values
-    flows = df_encoded.astype(
-        {col: bool for col in df_encoded.columns if col not in string_columns}
-    ).to_dict(orient="records")
+    # Convert DataFrame to a list of dictionaries with int values
+    # flows = df_encoded.astype(
+    #     {col: int for col in df_encoded.columns if col not in string_columns}
+    # ).to_dict(orient="records")
+
+    flows = df_encoded.to_dict(orient="records")
     # print(flows[0])
 
     # Create actions for helpers.bulk()

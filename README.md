@@ -70,4 +70,4 @@ Moyenne ecart type
 ACC
 F1 score
 
-commande pour supprimer index : curl -X http://localhost:9200/index_name
+commande pour supprimer index : curl -X DELETE http://localhost:9200/index_name

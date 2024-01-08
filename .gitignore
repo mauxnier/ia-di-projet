@@ -1,3 +1,4 @@
 TRAIN_ENSIBS/
 *.csv
 *.pkl
+*.xml

@@ -196,6 +196,8 @@ def process_df(df):
         "sourceTCPFlagsDescription",
         "destinationTCPFlagsDescription",
         "Tag",
+        "sensorInterfaceId",
+        "startTime",
     ]
     existing_columns = set(df.columns)
     columns_to_drop = [col for col in columns_to_drop if col in existing_columns]

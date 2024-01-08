@@ -6,7 +6,7 @@ from elasticsearch import Elasticsearch
 es = Elasticsearch(hosts=["http://localhost:9200"])
 
 # Définir le nom de l'index
-index_name = "flow_data_enc_1"
+index_name = "flow_data_enc_6"
 
 # Apply transport options to the Elasticsearch object
 es.options(request_timeout=60, max_retries=5, retry_on_timeout=True)
@@ -32,7 +32,7 @@ while len(result["hits"]["hits"]) > 0:
     result = es.scroll(scroll_id=result["_scroll_id"], scroll="2m")
 
 # Enregistrer le DataFrame global dans un fichier pickle
-all_data.to_pickle("all_flow_data.pkl")
+all_data.to_pickle("data/all_flow_data.pkl")
 
 # Vérification
 print("Nombre total d'enregistrements:", len(all_data))

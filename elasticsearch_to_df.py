@@ -1,3 +1,11 @@
+"""
+Project: AD4IDS - Anomaly Detection for Intrusion Detection Systems
+Subproject: 2 - Flow Classification
+Stage: 1 - Data Collection
+Authors: MONNIER Killian & BAKKARI Ikrame
+Date: 01/2024
+"""
+
 import numpy as np
 import pandas as pd
 from elasticsearch import Elasticsearch

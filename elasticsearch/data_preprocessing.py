@@ -4,6 +4,8 @@ Subproject: 1 - Flow Classification
 Stage: 4 - Data preprocessing (one-hot encoding)
 Authors: MONNIER Killian & BAKKARI Ikrame
 Date: 10/2023
+
+@deprecated: Nous utilisons maintenant preprocess_df.py pour encoder les données depuis un fichier pickle (plus rapide).
 """
 
 from elasticsearch import Elasticsearch, helpers

@@ -1,3 +1,11 @@
+"""
+Project: AD4IDS - Anomaly Detection for Intrusion Detection Systems
+Subproject: Challenge 1 - HTTPWeb & SSH
+Stage: 1 - Data parsing & Preprocessing
+Authors: MONNIER Killian & BAKKARI Ikrame
+Date: 01/2024
+"""
+
 import xml.etree.ElementTree as ET
 import pandas as pd
 import ipaddress

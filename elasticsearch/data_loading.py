@@ -53,8 +53,5 @@ flow_df = pd.DataFrame(all_flow_data)
 # Sauvegarder en fichier pickle
 flow_df.to_pickle("data/flow_df.pkl")
 
-# Désormais, all_flow_data contient une liste de dictionnaires, où chaque dictionnaire correspond à un seul flux
-# Vous pouvez accéder et manipuler les données selon vos besoins
-
 print("Longueur: ", len(flow_df))
 print(flow_df.head())

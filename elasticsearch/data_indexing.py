@@ -7,7 +7,7 @@ Date: 10/2023
 """
 
 from elasticsearch import Elasticsearch, helpers
-from elasticsearch.data_loading import all_flow_data
+from data_loading import all_flow_data
 
 # Spécifiez les URL des nœuds Elasticsearch (peut être un seul ou une liste de nœuds)
 hosts = ["http://localhost:9200"]  # Exemple pour un nœud local

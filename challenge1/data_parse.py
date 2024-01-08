@@ -2,158 +2,15 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import ipaddress
 import pickle
+import sys
+import os
+
+# Ajouter le dossier parent au sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from preprocess_df import preprocess_data
 
 pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
-
-
-def preprocess_data(df):
-    # Perform conversions on the data
-    columns_to_convert = [
-        "sourcePort",
-        "destinationPort",
-        "totalSourceBytes",
-        "totalDestinationBytes",
-        "totalSourcePackets",
-        "totalDestinationPackets",
-    ]
-    for column in columns_to_convert:
-        df[column] = pd.to_numeric(df[column], errors="coerce")
-
-    # Convert startDateTime and stopDateTime into datetime objects and calculate duration
-    df["startDateTime"] = pd.to_datetime(df["startDateTime"])
-    df["stopDateTime"] = pd.to_datetime(df["stopDateTime"])
-    df["duration"] = df["stopDateTime"] - df["startDateTime"]
-    df["duration"] = df["duration"].apply(lambda x: int(x.total_seconds()))
-
-    # Perform encoding on Categorical Data
-    # Créer des intervalles pour les adresses IP
-    def map_ip_to_interval(ip):
-        ip = ipaddress.IPv4Address(ip)
-        if ip <= ipaddress.IPv4Address("128.0.0.0"):
-            return "PrivateNetwork"
-        elif ip <= ipaddress.IPv4Address("192.0.0.0"):
-            return "PublicNetwork"
-        elif ip <= ipaddress.IPv4Address("224.0.0.0"):
-            return "MulticastNetwork"
-        else:
-            return "UnknownNetwork"
-
-    # Créer des intervalles de ports
-    port_bins = [0, 1023, 49151, 65535]
-    port_labels = ["WellKnownPorts", "RegisteredPorts", "DynamicPrivatePorts"]
-
-    # Créer des intervalles pour totalSourceBytes et totalDestinationBytes
-    bytes_bins = [
-        0,
-        10000,
-        50000,
-        float("inf"),
-    ]
-    bytes_labels = ["Small", "Medium", "Large"]
-
-    # Créer des intervalles pour totalSourcePackets et totalDestinationPackets
-    packets_bins = [
-        0,
-        100,
-        500,
-        float("inf"),
-    ]
-    packets_labels = ["Low", "Medium", "High"]
-
-    # Liste des noms de colonnes catégorielles
-    categorical_columns = [
-        "sourceCategory",
-        "destinationCategory",
-        "sourcePortCategory",
-        "destinationPortCategory",
-        "totalSourceBytesCategory",
-        "totalDestinationBytesCategory",
-        "totalSourcePacketsCategory",
-        "totalDestinationPacketsCategory",
-    ]
-
-    for column in categorical_columns:
-        field_name = column.replace("Category", "")
-        if column == "sourceCategory" or column == "destinationCategory":
-            df[column] = df[field_name].apply(map_ip_to_interval)
-        if column == "sourcePortCategory" or column == "destinationPortCategory":
-            df[column] = pd.cut(
-                df[field_name], bins=port_bins, labels=port_labels, include_lowest=True
-            )
-        if (
-            column == "totalSourceBytesCategory"
-            or column == "totalDestinationBytesCategory"
-        ):
-            df[column] = pd.cut(
-                df[field_name],
-                bins=bytes_bins,
-                labels=bytes_labels,
-                include_lowest=True,
-            )
-        if (
-            column == "totalSourcePacketsCategory"
-            or column == "totalDestinationPacketsCategory"
-        ):
-            df[column] = pd.cut(
-                df[field_name],
-                bins=packets_bins,
-                labels=packets_labels,
-                include_lowest=True,
-            )
-
-    # Extract year, month, day from startDateTime and stopDateTime
-    df["start_year"] = df["startDateTime"].dt.year
-    df["stop_year"] = df["stopDateTime"].dt.year
-    df["start_month"] = df["startDateTime"].dt.month
-    df["stop_month"] = df["stopDateTime"].dt.month
-    df["start_day"] = df["startDateTime"].dt.day
-    df["stop_day"] = df["stopDateTime"].dt.day
-
-    # Perform One-Hot Encoding on Categorical Data
-    columns_to_encode = ["direction", "protocolName"]
-    columns_to_encode.extend(categorical_columns)
-    df = pd.get_dummies(df, columns=columns_to_encode)
-
-    # Modify the tag
-    df["tag_Attack"] = df["Tag"].apply(lambda x: 1 if x == "Attack" else 0)
-
-    # Modify sourceTCPFlagsDescription and destinationTCPFlagsDescription
-    unique_flags = ["F", "S", "R", "P", "A", "N/A"]
-    for flag in unique_flags:
-        df[f"sourceTCPFlag_{flag}"] = df["sourceTCPFlagsDescription"].apply(
-            lambda x: int(flag in x.split(",")) if pd.notna(x) else 0
-        )
-        df[f"destinationTCPFlag_{flag}"] = df["destinationTCPFlagsDescription"].apply(
-            lambda x: int(flag in x.split(",")) if pd.notna(x) else 0
-        )
-
-    # Drop unnecessary columns
-    columns_to_drop = [
-        "source",
-        "destination",
-        # "sourcePort",
-        # "destinationPort",
-        "totalSourceBytes",
-        "totalDestinationBytes",
-        "totalSourcePackets",
-        "totalDestinationPackets",
-        # "duration",
-        "startDateTime",
-        "stopDateTime",
-        "sourcePayloadAsBase64",
-        "sourcePayloadAsUTF",
-        "destinationPayloadAsBase64",
-        "destinationPayloadAsUTF",
-        "sourceTCPFlagsDescription",
-        "destinationTCPFlagsDescription",
-        "Tag",
-        "sensorInterfaceId",
-        "startTime",
-    ]
-    df.drop(columns=columns_to_drop, inplace=True, errors="ignore")
-
-    return df
 
 
 def parse_xml_to_dataframe(file_name):
@@ -192,11 +49,11 @@ def parse_xml_to_dataframe(file_name):
 
 
 # Parsing des fichiers XML
-# df_test = parse_xml_to_dataframe("challenge1/data/benchmark_HTTPWeb_test.xml")
-df_test = parse_xml_to_dataframe("challenge1/data/benchmark_SSH_test.xml")
+df_test = parse_xml_to_dataframe("challenge1/data/benchmark_HTTPWeb_test.xml")
+# df_test = parse_xml_to_dataframe("challenge1/data/benchmark_SSH_test.xml")
 
 # Charger le jeu de données complet
-with open("data/all_flow_data.pkl", "rb") as file:
+with open("data/df_preprocessed.pkl", "rb") as file:
     df_complet = pd.read_pickle(file)
 
 # Charger le jeu de données incomplet
@@ -211,15 +68,15 @@ for column in missing_columns:
     df_incomplet[column] = 0  # Remplir de zéros
 
 # Réorganiser les colonnes pour qu'elles correspondent à celles du jeu de données complet
-df_incomplet = df_incomplet[df_complet.columns]
+df_test = df_incomplet[df_complet.columns]
 
 # Sauvegarder le DataFrame avec les données manquantes
-df_incomplet = df_incomplet.drop(columns=["appName", "origin"], axis=1)
-df_incomplet.fillna(
+df_test = df_test.drop(columns=["appName", "origin"], errors="ignore")
+df_test.fillna(
     0, inplace=True
 )  # Remplacez toutes les valeurs NaN par 0 dans l'ensemble du DataFrame
 
 # Sauvegarder le DataFrame avec les features manquantes
-# with open("challenge1/data/df_HTTPWeb.pkl", "wb") as file:
-with open("challenge1/data/df_SSH.pkl", "wb") as file:
-    pickle.dump(df_incomplet, file)
+with open("challenge1/data/df_HTTPWeb.pkl", "wb") as file:
+    # with open("challenge1/data/df_SSH.pkl", "wb") as file:
+    pickle.dump(df_test, file)

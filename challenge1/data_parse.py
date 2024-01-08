@@ -20,6 +20,12 @@ from preprocess_df import preprocess_data
 pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
 
+# xml_file = "challenge1/data/benchmark_HTTPWeb_test.xml"
+xml_file = "challenge1/data/benchmark_SSH_test.xml"
+processed_df_file = "data/df_preprocessed.pkl"
+# df_challenge_file = "challenge1/data/df_HTTPWeb.pkl"
+df_challenge_file = "challenge1/data/df_SSH.pkl"
+
 
 def parse_xml_to_dataframe(file_name):
     print("Parsing", file_name, "XML file...")
@@ -57,11 +63,10 @@ def parse_xml_to_dataframe(file_name):
 
 
 # Parsing des fichiers XML
-df_test = parse_xml_to_dataframe("challenge1/data/benchmark_HTTPWeb_test.xml")
-# df_test = parse_xml_to_dataframe("challenge1/data/benchmark_SSH_test.xml")
+df_test = parse_xml_to_dataframe(xml_file)
 
 # Charger le jeu de données complet
-with open("data/df_preprocessed.pkl", "rb") as file:
+with open(processed_df_file, "rb") as file:
     df_complet = pd.read_pickle(file)
 
 # Charger le jeu de données incomplet
@@ -85,6 +90,5 @@ df_test.fillna(
 )  # Remplacez toutes les valeurs NaN par 0 dans l'ensemble du DataFrame
 
 # Sauvegarder le DataFrame avec les features manquantes
-with open("challenge1/data/df_HTTPWeb.pkl", "wb") as file:
-    # with open("challenge1/data/df_SSH.pkl", "wb") as file:
+with open(df_challenge_file, "wb") as file:
     pickle.dump(df_test, file)

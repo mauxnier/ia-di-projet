@@ -3,3 +3,4 @@ TRAIN_ENSIBS/
 *.pkl
 *.xml
 *.zip
+.results
